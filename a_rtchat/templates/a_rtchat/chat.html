@@ -1,0 +1,148 @@
+{% extends 'layouts/blank.html' %}
+
+{% block content %}
+<div class="flex max-w-7xl mx-auto my-10 h-[45rem] bg-gray-800 rounded-2xl shadow-2xl">
+    <!-- Left Column: User List -->
+    <div class="w-1/4 bg-gray-900 text-white p-4 overflow-y-auto rounded-l-2xl" id="left_column">
+        <!-- User Profile Name -->
+        <div class="mb-4 flex items-center gap-2">
+            <img class="w-12 h-12 rounded-full object-cover"
+                 src="{{ user.profile.avatar|default:'default-avatar.png' }}" alt="{{ user.username }}">
+            <div>
+                <span class="font-bold text-lg">{{ user.profile.name|default:user.username }}</span>
+                <span class="text-sm text-gray-400">@{{ user.username }}</span>
+            </div>
+        </div>
+
+        <!-- Search Bar -->
+        <div class="mb-4">
+            <input
+                type="text"
+                id="user-search"
+                class="w-full p-2 rounded bg-gray-800 text-white"
+                placeholder="Search users..."
+                onkeyup="filterUsers()">
+        </div>
+
+        <!-- User List and Hover List Section -->
+        <div id="left_scroll" class="overflow-y-auto h-[30rem] bg-gray-700 rounded-xl p-4 scrollbar-hidden">
+            <ul class="hoverlist hover space-y-2 text-white hover:text-black" id="hoverlist" >
+                <li><a href="{% url 'home' %}">Public Chat</a></li>
+                {% for chatroom in user.chat_groups.all %}
+                    {% if chatroom.is_private %}
+                        {% for member in chatroom.members.all %}
+                            {% if member != user %}
+                                {% if chatroom.group_name %}
+                                    <li>
+                                        <a href="{% url 'chatroom' chatroom.group_name %}" class="text-white hover:text-black ">
+                                            <img class="w-12 h-12 rounded-full object-cover"
+                                            src="{{ member.profile.avatar|default:'default-avatar.png' }}"/>
+                                           {{ member.profile.name }}
+                                        </a>
+                                    </li>
+                                {% endif %}
+                            {% endif %}
+                        {% endfor %}
+                    {% endif %}
+                {% endfor %}
+            </ul>
+            <!-- Logged-In Users -->
+            <ul id="user-list" class="space-y-2 mt-4">
+                {% for user in logged_in_users %}
+                <li class="flex items-center gap-2 p-2 hover:bg-gray-800 rounded">
+                    <img class="w-10 h-10 rounded-full object-cover"
+                         src="{{ user.profile.avatar|default:'default-avatar.png' }}"
+                         alt="{{ user.username }}">
+                    <a href="{% url 'chatroom' user.username %}" class="text-sm font-medium">
+                        {{ user.profile.name|default:user.username }}
+                    </a>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+
+    <!-- Right Column: Chat Window -->
+    <div class="w-3/4 flex flex-col p-4 rounded-r-2xl">
+        <!-- Chat Header -->
+        <div class="flex justify-center text-emerald-400 bg-gray-800 p-2 sticky top-0 z-10">
+            {% if other_user %}
+            <a href="{% url 'profile' other_user.username %}" class="flex items-center gap-2">
+                <img class="w-10 h-10 rounded-full object-cover" src="{{ other_user.profile.avatar }}">
+                <div>
+                    <span class="font-bold text-white">{{ other_user.profile.name }}</span>
+                    <span class="text-sm font-light text-gray-400">@{{ other_user.username }}</span>
+                </div>
+            </a>
+            {% else %}
+            <span id="online-count" class="pr-1">online</span>
+            {% endif %}
+        </div>
+
+        <!-- Chat Messages -->
+        <div id="chat_container" class="overflow-y-auto grow bg-gray-700 rounded-xl p-4">
+            <ul id="chat_messages" class="space-y-4">
+                {% for message in chat_messages reversed %}
+                {% include 'a_rtchat/chat_message.html' %}
+                {% endfor %}
+            </ul>
+        </div>
+
+        <!-- Message Input -->
+        <div class="sticky bottom-0 z-10 p-2 bg-gray-800">
+            <form id="chat_message_form"
+                  class="w-full flex items-center gap-2"
+                  hx-ext="ws"
+                  ws-connect="/ws/chatroom/{{ chatroom_name }}"
+                  ws-send
+                  _="on htmx:wsAfterSend reset() me">
+                {% csrf_token %}
+                {{ form.as_p }}
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block javascript %}
+<script>
+    // Scroll chat to the bottom
+    function scrollToBottom() {
+        const container = document.getElementById('chat_container');
+        container.scrollTop = container.scrollHeight;
+    }
+    scrollToBottom();
+
+    // Filter users in the left panel
+    function filterUsers() {
+        const searchInput = document.getElementById('user-search').value.toLowerCase();
+        const userListItems = document.getElementById('user-list').getElementsByTagName('li');
+        const hoverListItems = document.getElementById('hoverlist').getElementsByTagName('li');
+
+        // Filter user list
+        for (let i = 0; i < userListItems.length; i++) {
+            const userName = userListItems[i].innerText.toLowerCase();
+            userListItems[i].style.display = userName.includes(searchInput) ? '' : 'none';
+        }
+
+        // Filter hover list (Public Chat and Private Chats)
+        for (let i = 0; i < hoverListItems.length; i++) {
+            const chatName = hoverListItems[i].innerText.toLowerCase();
+            hoverListItems[i].style.display = chatName.includes(searchInput) ? '' : 'none';
+        }
+    }
+</script>
+{% endblock %}
+
+{% block custom_css %}
+<style>
+    #left_scroll {
+        scrollbar-width: none;  /* Firefox */
+        -ms-overflow-style: none;  /* Internet Explorer 10+ */
+    }
+
+    #left_scroll::-webkit-scrollbar {
+        display: none;  /* Safari and Chrome */
+    }
+</style>
+{% endblock %}
